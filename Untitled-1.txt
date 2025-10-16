@@ -1,0 +1,251 @@
+// src/main/java/com/insurance/claims/service/ClaimsServiceImpl.java
+package com.insurance.claims.service;
+
+import com.insurance.claims.model.Claim;
+import com.insurance.claims.model.ClaimStatus;
+import com.insurance.claims.model.MedicalRecord;
+import com.insurance.claims.repository.ClaimRepository;
+import com.insurance.claims.repository.MedicalRecordRepository;
+import com.insurance.claims.event.ClaimStatusChangeEvent;
+import com.insurance.claims.exception.ClaimNotFoundException;
+import com.insurance.claims.exception.MedicalRecordNotFoundException;
+import com.insurance.federation.FederationEventProcessor;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+
+@Service
+public class ClaimsServiceImpl implements ClaimsService {
+
+    private static final Logger log = LoggerFactory.getLogger(ClaimsServiceImpl.class);
+
+    private final ClaimRepository claimRepository;
+    private final MedicalRecordRepository medicalRecordRepository;
+    private final ApplicationEventPublisher eventPublisher;
+    private final FederationEventProcessor federationEventProcessor;
+
+    @Autowired
+    public ClaimsServiceImpl(
+            ClaimRepository claimRepository,
+            MedicalRecordRepository medicalRecordRepository,
+            ApplicationEventPublisher eventPublisher,
+            FederationEventProcessor federationEventProcessor) {
+        this.claimRepository = claimRepository;
+        this.medicalRecordRepository = medicalRecordRepository;
+        this.eventPublisher = eventPublisher;
+        this.federationEventProcessor = federationEventProcessor;
+    }
+
+    @Override
+    public List<Claim> getAllClaims() {
+        log.info("Retrieving all claims");
+        return claimRepository.findAll();
+    }
+
+    @Override
+    public Page<Claim> getClaimsByStatus(ClaimStatus status, Pageable pageable) {
+        log.info("Retrieving claims with status: {}", status);
+        return claimRepository.findByStatus(status, pageable);
+    }
+
+    @Override
+    public Claim getClaimById(String claimId) {
+        log.info("Retrieving claim with ID: {}", claimId);
+        return claimRepository.findById(claimId)
+                .orElseThrow(() -> new ClaimNotFoundException("Claim not found with ID: " + claimId));
+    }
+
+    @Override
+    public List<Claim> getClaimsByPatientId(String patientId) {
+        log.info("Retrieving claims for patient ID: {}", patientId);
+        return claimRepository.findByPatientId(patientId);
+    }
+
+    @Override
+    @Transactional
+    public Claim createClaim(Claim claim) {
+        log.info("Creating new claim for patient ID: {}", claim.getPatientId());
+        // Generate claim number if not provided
+        if (claim.getClaimNumber() == null || claim.getClaimNumber().isEmpty()) {
+            claim.setClaimNumber("CLM" + UUID.randomUUID().toString().substring(0, 8).toUpperCase());
+        }
+        
+        claim.setSubmissionDate(LocalDateTime.now());
+        claim.setLastUpdated(LocalDateTime.now());
+        
+        if (claim.getStatus() == null) {
+            claim.setStatus(ClaimStatus.PENDING);
+        }
+        
+        return claimRepository.save(claim);
+    }
+
+    @Override
+    @Transactional
+    public Claim updateClaimStatus(String claimId, ClaimStatus newStatus) {
+        log.info("Updating claim {} status to {}", claimId, newStatus);
+        
+        Claim claim = getClaimById(claimId);
+        ClaimStatus oldStatus = claim.getStatus();
+        
+        claim.setStatus(newStatus);
+        claim.setLastUpdated(LocalDateTime.now());
+        
+        // Add processing notes based on status change
+        String statusChangeNote = String.format(
+            "Status changed from %s to %s on %s", 
+            oldStatus, 
+            newStatus, 
+            claim.getLastUpdated()
+        );
+        
+        claim.addProcessingNote(statusChangeNote);
+        
+        Claim updatedClaim = claimRepository.save(claim);
+        
+        // Publish event for status change
+        eventPublisher.publishEvent(new ClaimStatusChangeEvent(
+            this,
+            updatedClaim.getId(),
+            oldStatus,
+            newStatus
+        ));
+        
+        return updatedClaim;
+    }
+
+    @Override
+    @Transactional
+    public void processClaimWithMedicalRecord(String claimId, String medicalRecordId) {
+        log.info("Processing claim {} with medical record {}", claimId, medicalRecordId);
+        
+        Claim claim = getClaimById(claimId);
+        MedicalRecord medicalRecord = medicalRecordRepository.findById(medicalRecordId)
+                .orElseThrow(() -> new MedicalRecordNotFoundException("Medical record not found with ID: " + medicalRecordId));
+        
+        // Link the claim to the medical record
+        claim.setMedicalRecordId(medicalRecordId);
+        
+        // Update claim with medical record information
+        claim.setDiagnosisCodes(medicalRecord.getDiagnosisCodes());
+        
+        // Determine if claim status should change based on medical record
+        if (claim.getStatus() == ClaimStatus.PENDING || claim.getStatus() == ClaimStatus.ADDITIONAL_INFO_NEEDED) {
+            claim.setStatus(ClaimStatus.IN_REVIEW);
+            claim.addProcessingNote("Medical record received. Claim moved to review.");
+        }
+        
+        claim.setLastUpdated(LocalDateTime.now());
+        claimRepository.save(claim);
+        
+        log.info("Claim {} updated with medical record information", claimId);
+    }
+
+    @Override
+    @Transactional
+    public void handleMedicalRecordUpdate(String externalPatientId, String externalRecordId, Map<String, Object> updateData) {
+        log.info("Handling medical record update for patient {} and record {}", externalPatientId, externalRecordId);
+        
+        // Find all claims for the patient that might be affected
+        List<Claim> patientClaims = claimRepository.findByExternalPatientId(externalPatientId);
+        
+        if (patientClaims.isEmpty()) {
+            log.info("No claims found for patient with external ID: {}", externalPatientId);
+            return;
+        }
+        
+        // Look up or create the medical record
+        Optional<MedicalRecord> existingRecord = medicalRecordRepository.findByExternalRecordId(externalRecordId);
+        
+        MedicalRecord medicalRecord;
+        boolean isNewRecord = false;
+        
+        if (existingRecord.isPresent()) {
+            medicalRecord = existingRecord.get();
+            log.info("Updating existing medical record: {}", medicalRecord.getId());
+        } else {
+            medicalRecord = new MedicalRecord();
+            medicalRecord.setId(UUID.randomUUID().toString());
+            medicalRecord.setExternalRecordId(externalRecordId);
+            medicalRecord.setPatientId(patientClaims.get(0).getPatientId());
+            medicalRecord.setExternalPatientId(externalPatientId);
+            isNewRecord = true;
+            log.info("Creating new medical record for external record: {}", externalRecordId);
+        }
+        
+        // Update the medical record with the new data
+        updateMedicalRecordFromMap(medicalRecord, updateData);
+        medicalRecord.setLastSyncDate(LocalDateTime.now());
+        
+        // Save the medical record
+        medicalRecord = medicalRecordRepository.save(medicalRecord);
+        
+        // Update all related claims
+        for (Claim claim : patientClaims) {
+            // Only process claims that are not finalized (approved/denied/closed)
+            if (claim.getStatus() != ClaimStatus.APPROVED && 
+                claim.getStatus() != ClaimStatus.DENIED && 
+                claim.getStatus() != ClaimStatus.CLOSED) {
+                
+                if (claim.getMedicalRecordId() == null || isNewRecord) {
+                    claim.setMedicalRecordId(medicalRecord.getId());
+                }
+                
+                claim.setDiagnosisCodes(medicalRecord.getDiagnosisCodes());
+                claim.addProcessingNote("Medical record updated: " + medicalRecord.getDiagnosis());
+                claim.setLastUpdated(LocalDateTime.now());
+                
+                // Move PENDING claims to IN_REVIEW if they now have medical data
+                if (claim.getStatus() == ClaimStatus.PENDING || claim.getStatus() == ClaimStatus.ADDITIONAL_INFO_NEEDED) {
+                    claim.setStatus(ClaimStatus.IN_REVIEW);
+                }
+                
+                claimRepository.save(claim);
+                log.info("Updated claim {} with new medical record information", claim.getId());
+                
+                // Publish event about the update
+                eventPublisher.publishEvent(new ClaimStatusChangeEvent(
+                    this,
+                    claim.getId(),
+                    claim.getStatus(),
+                    claim.getStatus(),
+                    "MEDICAL_RECORD_UPDATE"
+                ));
+            }
+        }
+    }
+    
+    private void updateMedicalRecordFromMap(MedicalRecord record, Map<String, Object> data) {
+        if (data.containsKey("diagnosis")) {
+            record.setDiagnosis((String) data.get("diagnosis"));
+        }
+        
+        if (data.containsKey("notes")) {
+            record.setNotes((String) data.get("notes"));
+        }
+        
+        if (data.containsKey("diagnosisCodes")) {
+            record.setDiagnosisCodes((List<String>) data.get("diagnosisCodes"));
+        }
+        
+        if (data.containsKey("treatments")) {
+            record.setTreatmentSummary((String) data.get("treatments"));
+        }
+        
+        if (data.containsKey("medications")) {
+            record.setMedicationSummary((String) data.get("medications"));
+        }
+    }
+}
