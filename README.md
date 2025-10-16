@@ -1,66 +1,86 @@
 # Federated_Database_System
-Federated database application designed  to bridge the gap between healthcare providers and insurance companies. 
+Federated database application designed to bridge the gap between healthcare providers and insurance companies.
 
-
-##  Overview
+## Overview
 
 This project demonstrates a **Federated Database System** integrating **Hospital (Relational)** and **Insurance (Graph)** data to provide unified access to patient, medical record, policy, and claim information across multiple systems.
 
-- **Hospital Data:** Stored in Microsoft SQL Server (relational).  
-- **Insurance Data:** Stored in Neo4j (graph-based).  
-- **Middleware:** FastAPI backend for CRUD and federated queries.  
+- **Hospital Data:** Stored in Microsoft SQL Server (relational).
+- **Insurance Data:** Stored in Neo4j (graph-based).
+- **Middleware:** FastAPI backend for CRUD and federated queries.
 - **Frontend:** React-based interface with role-based portals.
 
 > This project showcases cross-database query federation, schema mapping, and secure CRUD operations.
 
 ---
 
-##  Features
+## Features
 
-- Full **CRUD** operations for both SQL Server and Neo4j databases.  
-- **Federated API endpoints** combining relational and graph data.  
-- **Role-based React frontend** for hospital and insurance users.  
-- **Pydantic validation** for API data integrity.  
-- **Error handling and async operations** for robust performance.  
+- Full **CRUD** operations for both SQL Server and Neo4j databases.
+- **Federated API endpoints** combining relational and graph data.
+- **Role-based React frontend** for hospital and insurance users.
+- **Pydantic validation** for API data integrity.
+- **Error handling and async operations** for robust performance.
 - Database initialization scripts with **sample data**.
-
 
 ## Tech Stack
 
-| Layer | Technologies |
-| **Backend** | Python, FastAPI, Pydantic, pyodbc, neo4j-driver |
-| **Databases** | Microsoft SQL Server, Neo4j |
-| **Frontend** | React (JavaScript/TypeScript) |
-| **Dev Tools** | Uvicorn, npm/yarn, Docker (optional) |
+| Layer      | Technologies                                                         |
+|------------|----------------------------------------------------------------------|
+| Backend    | Python, FastAPI, Pydantic, pyodbc (SQL Server), neo4j-driver        |
+| Databases  | Microsoft SQL Server, Neo4j                                          |
+| Frontend   | React (JavaScript / TypeScript), npm / yarn                         |
+| Dev Tools  | Uvicorn, Docker (optional), Docker Compose (recommended)            |
+| Testing    | pytest (suggested), FastAPI TestClient                              |
 
 ---
 
-##  Project Structure
-├─ backend/
-│  ├─ app/
-│  │  ├─ main.py
-│  │  ├─ routes.py
-│  │  ├─ database.py
-│  │  ├─ models.py
-│  │  ├─ sql_scripts.py
-│  │  └─ neo4j_scripts.py
-│  └─ requirements.txt
-├─ frontend/
-│  ├─ package.json
-│  ├─ src/
-│  │  ├─ components/
-│  │  └─ pages/
-│  └─ README-frontend.md
-├─ docs/
-│  ├─ Raksha_Mohan_final_project.pdf
-│  └─ RakshaMohan_FinalProjectPPT.pptx
-└─ README.md
+## Project Structure
 
-````
+```
+Federated-Database-System/
+│
+├── backend/
+│   ├── app/
+│   │   ├── main.py              # FastAPI application entrypoint
+│   │   ├── routes.py            # API endpoints for SQL, Neo4j, and federated queries
+│   │   ├── database.py          # Connection setup for SQL Server and Neo4j
+│   │   ├── models.py            # Pydantic models for request/response schemas
+│   │   ├── services.py          # Core logic and data federation layer
+│   │   ├── sql_scripts.py       # SQL Server schema + sample data setup
+│   │   └── neo4j_scripts.py     # Neo4j schema + sample data setup
+│   │
+│   ├── tests/
+│   │   └── test_endpoints.py    # Unit tests (optional)
+│   │
+│   ├── requirements.txt         # Python dependencies
+│   └── .env.example             # Example environment configuration
+│
+├── frontend/
+│   ├── public/
+│   │   └── index.html           # React entry HTML
+│   │
+│   ├── src/
+│   │   ├── components/          # UI components (buttons, forms, etc.)
+│   │   ├── pages/               # Page-level components (Home, Patients, Claims)
+│   │   ├── services/            # API calls to FastAPI backend
+│   │   └── App.jsx              # Root React component
+│   │
+│   ├── package.json             # Frontend dependencies and scripts
+│   └── README-frontend.md       # Frontend setup guide
+│
+├── docs/
+│   ├── Raksha_Mohan_final_project.pdf      # Project report
+│   └── RakshaMohan_FinalProjectPPT.pptx    # Project presentation slides
+│
+├── docker-compose.yml           # Optional: orchestrates SQL Server, Neo4j, backend, frontend
+├── .gitignore                   # Git ignore rules
+└── README.md                    # Main project documentation
+```
 
 ---
 
- Database Schemas
+## Database Schemas
 
 ### SQL Server (Hospital)
 **Tables:**
@@ -76,19 +96,19 @@ This project demonstrates a **Federated Database System** integrating **Hospital
 
 ---
 
- Setup Instructions
+## Setup Instructions
 
- Prerequisites
+### Prerequisites
 
-- Python 3.10+  
-- Node.js 16+ / npm or yarn  
-- Microsoft SQL Server (local or Docker)  
-- Neo4j (Desktop or Docker)  
-- ODBC Driver 18 for SQL Server  
+- Python 3.10+
+- Node.js 16+ / npm or yarn
+- Microsoft SQL Server (local or Docker)
+- Neo4j (Desktop or Docker)
+- ODBC Driver 18 for SQL Server
 
 ---
 
- Environment Variables
+### Environment Variables
 
 Create a `.env` file in the `backend/` directory:
 
@@ -107,10 +127,11 @@ NEO4J_PASSWORD=neo4j-password
 
 # FastAPI
 SECRET_KEY=supersecretkey
-````
+```
 
 ---
- Initialize Databases
+
+### Initialize Databases
 
 **SQL Server**
 
@@ -129,7 +150,8 @@ python backend/app/neo4j_scripts.py
 Creates InsurancePolicy and Claim nodes with relationships.
 
 ---
- Run the Backend (FastAPI)
+
+### Run the Backend (FastAPI)
 
 ```bash
 cd backend
@@ -138,11 +160,12 @@ source .venv/bin/activate     # (Windows: .venv\Scripts\activate)
 pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
+
 OpenAPI Docs: [http://localhost:8000/docs](http://localhost:8000/docs)
 
 ---
 
- Run the Frontend (React)
+### Run the Frontend (React)
 
 ```bash
 cd frontend
@@ -152,10 +175,12 @@ npm start
 
 Then open [http://localhost:3000](http://localhost:3000)
 
- Example API Endpoints
+---
+
+## Example API Endpoints
 
 | Method | Endpoint                   | Description                     |
-| ------ | -------------------------- | ------------------------------- |
+|--------|----------------------------|---------------------------------|
 | `POST` | `/hospital/patients`       | Create patient (SQL Server)     |
 | `GET`  | `/hospital/patients/{id}`  | Get patient + records           |
 | `POST` | `/insurance/policies`      | Create insurance policy (Neo4j) |
@@ -167,40 +192,42 @@ Then open [http://localhost:3000](http://localhost:3000)
 ```bash
 curl http://localhost:8000/federated/patients/123
 ```
----
-##  Data Validation
-
-* All request and response models use **Pydantic** for type safety.
-* Federated responses merge relational and graph models seamlessly.
 
 ---
 
-##  Testing
+## Data Validation
 
-* Use `pytest` or FastAPI’s test client.
-* Include test databases or mock connections in `backend/tests/`.
+- All request and response models use **Pydantic** for type safety.
+- Federated responses merge relational and graph models seamlessly.
+
+---
+
+## Testing
+
+- Use `pytest` or FastAPI's test client.
+- Include test databases or mock connections in `backend/tests/`.
 
 ---
 
 ## Deployment Notes
 
-* Each service (FastAPI, SQL Server, Neo4j, React) can be containerized.
-* Use **Docker Compose** for orchestration.
-* Secure credentials using environment variables or secret stores.
-* Use HTTPS and configure proper CORS in production.
+- Each service (FastAPI, SQL Server, Neo4j, React) can be containerized.
+- Use **Docker Compose** for orchestration.
+- Secure credentials using environment variables or secret stores.
+- Use HTTPS and configure proper CORS in production.
 
 ---
 
-##  Limitations & Future Scope
+## Limitations & Future Scope
 
-* Replace demo authentication with **JWT/OAuth2**.
-* Add **distributed transaction management** or **event-driven updates**.
-* Extend to support **FHIR-compliant healthcare data exchange**.
-* Implement **logging and monitoring** dashboards.
+- Replace demo authentication with **JWT/OAuth2**.
+- Add **distributed transaction management** or **event-driven updates**.
+- Extend to support **FHIR-compliant healthcare data exchange**.
+- Implement **logging and monitoring** dashboards.
 
 ---
 
-##  Contribution Guidelines
+## Contribution Guidelines
 
 1. Fork this repo.
 2. Create a branch: `git checkout -b feature/your-feature`.
@@ -210,12 +237,9 @@ curl http://localhost:8000/federated/patients/123
 
 ---
 
-## 📚 References
+## References
 
-* Microsoft SQL Server Docs
-* Neo4j Graph Database Docs
-* FastAPI Documentation
-* React Documentation
-
-
-
+- Microsoft SQL Server Docs
+- Neo4j Graph Database Docs
+- FastAPI Documentation
+- React Documentation
