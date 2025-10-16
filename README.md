@@ -3,8 +3,6 @@ Federated database application designed  to bridge the gap between healthcare pr
 Here’s your **ready-to-copy** `README.md` file for GitHub — formatted perfectly for Markdown, with section links, code blocks, and polished structure.
 
 # Federated Database System for Healthcare and Insurance Integration
-
-**Authors:** Group 1 — Rowan Raj Ignatius, **Raksha Mohan**, Pavan  
 **Files included:**  
 -  `Raksha_Mohan_final_project.pdf` — Full project report  
 -  `RakshaMohan_FinalProjectPPT.pptx` — Presentation slides  
